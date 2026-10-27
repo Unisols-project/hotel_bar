@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Inventory</div>
+      <div class="page-title">Report</div>
+      <div class="page-sub">Product-wise stock received, stock sold, and available stock</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="form-grid">
+      <div class="field">
+        <label for="stock-filter">Available Stock</label>
+        <select id="stock-filter">
+          <option value="All">All</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Product</th><th>Category</th><th>ML / L</th><th>Stock In</th><th>Last Stock In</th><th>Stock Out</th><th>Last Sold</th><th>Available</th><th>Status</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="9"><div class="empty-state">Loading...</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("report", "Bar Ledger");
+  checkBackendHealth();
+  let REPORT_ROWS = [];
+
+  function productSize(p) {
+    return p.volume_value ? `${money(p.volume_value)} ${esc(p.volume_unit || "")}` : "-";
+  }
+
+  function stockStatus(row) {
+    const available = Number(row.available_stock || 0);
+    const minStock = Number(row.min_stock || 0);
+    if (available <= minStock) return { label: "Low", cls: "bad" };
+    if (available <= minStock * 2) return { label: "Medium", cls: "warn" };
+    return { label: "High", cls: "ok" };
+  }
+
+  function renderRows() {
+    const selected = document.getElementById("stock-filter").value;
+    const rows = selected === "All"
+      ? REPORT_ROWS
+      : REPORT_ROWS.filter(r => stockStatus(r).label === selected);
+
+    document.getElementById("rows").innerHTML = rows.length
+      ? rows.map(r => {
+          const status = stockStatus(r);
+          return `
+            <tr class="stock-row stock-${status.cls}">
+              <td>${esc(r.name)}</td>
+              <td>${esc(r.category)}</td>
+              <td class="mono">${productSize(r)}</td>
+              <td class="mono">${r.stock_in}</td>
+              <td class="mono">${dateTime(r.last_stock_in_at)}</td>
+              <td class="mono">${r.stock_out}</td>
+              <td class="mono">${dateTime(r.last_sold_at)}</td>
+              <td class="mono">${r.available_stock}</td>
+              <td><span class="badge ${status.cls}">${status.label}</span></td>
+            </tr>`;
+        }).join("")
+      : `<tr><td colspan="9"><div class="empty-state">No data available.</div></td></tr>`;
+  }
+
+  async function load() {
+    try {
+      REPORT_ROWS = await apiGet("/api/report");
+      renderRows();
+    } catch (e) {
+      document.getElementById("rows").innerHTML = `<tr><td colspan="9"><div class="empty-state">${esc(e.message)}</div></td></tr>`;
+    }
+  }
+
+  document.getElementById("stock-filter").addEventListener("change", renderRows);
+  load();
+</script>
+</body>
+</html>

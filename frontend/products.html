@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Products - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Inventory</div>
+      <div class="page-title">Products</div>
+      <div class="page-sub">Add food, liquor, and other items, then monitor stock levels.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-label">Add Product</div>
+    <form id="add-form" class="form-grid">
+      <div class="field"><label for="product-name">Name</label><input id="product-name" name="name" placeholder="Item name" required></div>
+      <div class="field"><label for="product-category">Category</label><select id="product-category" name="category"><option>Food</option><option>Liquor</option><option>Other</option></select></div>
+      <div class="field volume-field"><label for="product-volume-value">ML / L</label><input id="product-volume-value" name="volume_value" type="number" step="0.01" min="0" placeholder="750"></div>
+      <div class="field volume-field"><label for="product-volume-unit">Unit</label><select id="product-volume-unit" name="volume_unit"><option>ML</option><option>L</option></select></div>
+      <div class="field"><label for="product-rate">Rate</label><input id="product-rate" name="rate" type="number" step="0.01" min="0" placeholder="0.00" required></div>
+      <div class="field"><label for="product-stock">Stock</label><input id="product-stock" name="stock" type="number" min="0" placeholder="0" required></div>
+      <div class="field"><label for="product-min-stock">Min Stock</label><input id="product-min-stock" name="min_stock" type="number" min="0" placeholder="5"></div>
+      <div class="field"><button type="submit" class="btn btn-primary btn-block">+ Add Product</button></div>
+    </form>
+  </div>
+
+  <div class="section-label">All Products</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Category</th><th>ML / L</th><th>Rate</th><th>Stock</th><th>Min Stock</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="6"><div class="empty-state">Loading...</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("products", "Bar Ledger");
+  checkBackendHealth();
+
+  function productSize(p) {
+    return p.volume_value ? `${money(p.volume_value)} ${esc(p.volume_unit || "")}` : "-";
+  }
+
+  function toggleVolumeFields() {
+    const show = document.getElementById("product-category").value !== "Food";
+    document.querySelectorAll(".volume-field").forEach(el => el.style.display = show ? "" : "none");
+    document.getElementById("product-volume-value").required = show;
+  }
+
+  async function load() {
+    try {
+      const rows = await apiGet("/api/products");
+      document.getElementById("rows").innerHTML = rows.length
+        ? rows.map(p => `
+            <tr>
+              <td>${esc(p.name)}</td>
+              <td>${esc(p.category)}</td>
+              <td class="mono">${productSize(p)}</td>
+              <td class="mono">Rs ${money(p.rate)}</td>
+              <td class="mono">${p.stock}</td>
+              <td class="mono">${p.min_stock}</td>
+            </tr>`).join("")
+        : `<tr><td colspan="6"><div class="empty-state">No products yet.</div></td></tr>`;
+    } catch (e) {
+      document.getElementById("rows").innerHTML = `<tr><td colspan="6"><div class="empty-state">${esc(e.message)}</div></td></tr>`;
+    }
+  }
+
+  document.getElementById("product-category").addEventListener("change", toggleVolumeFields);
+
+  document.getElementById("add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const f = new FormData(e.target);
+      await apiPost("/api/products", Object.fromEntries(f));
+      e.target.reset();
+      toggleVolumeFields();
+      load();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  toggleVolumeFields();
+  load();
+</script>
+</body>
+</html>

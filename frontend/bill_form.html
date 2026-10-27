@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New Bill — Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Billing</div>
+      <div class="page-title">New Bill</div>
+      <div class="page-sub">Enter hotel details, choose items, and calculate tax automatically.</div>
+    </div>
+  </div>
+
+  <form id="bill-form">
+    <div class="panel">
+      <div class="section-label">Hotel Information</div>
+      <div class="form-grid">
+        <div class="field"><label for="bill-hotel-name">Hotel name</label><input id="bill-hotel-name" name="hotel_name" placeholder="Hotel name" required></div>
+        <div class="field"><label for="bill-table-no">Table number</label><input id="bill-table-no" name="table_no" placeholder="Table number"></div>
+        <div class="field"><label for="bill-customer-name">Customer name</label><input id="bill-customer-name" name="customer_name" placeholder="Customer name"></div>
+        <div class="field"><label for="bill-phone">Phone</label><input id="bill-phone" name="phone" placeholder="Phone no"></div>
+        <div class="field"><label for="bill-payment">Payment</label>
+          <select id="bill-payment" name="payment"><option>Cash</option><option>UPI</option><option>Card</option><option>Pending</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div id="items-area"><div class="empty-state">Loading products…</div></div>
+
+    <button type="submit" class="btn btn-primary">Save Bill</button>
+  </form>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("bill", "Bar Ledger");
+  checkBackendHealth();
+
+  let PRODUCTS = [];
+
+  function productSize(p) {
+    return p.volume_value ? `${money(p.volume_value)} ${esc(p.volume_unit || "")}` : "";
+  }
+
+  async function loadItems() {
+    PRODUCTS = (await apiGet("/api/products")).filter(p => p.stock > 0);
+    const cats = ["Food", "Liquor", "Other"];
+    document.getElementById("items-area").innerHTML = cats.map(cat => {
+      const rows = PRODUCTS.filter(p => p.category === cat);
+      const body = rows.length
+        ? rows.map(p => `
+            <tr>
+              <td>${esc(p.name)}${productSize(p) ? ` <span class="muted">(${productSize(p)})</span>` : ""}</td>
+              <td class="mono">${p.stock}</td>
+              <td class="mono">₹${money(p.rate)}</td>
+              <td><input class="qty-input" aria-label="Quantity for ${esc(p.name)}" data-id="${p.id}" data-rate="${p.rate}" data-name="${esc(p.name)}" data-cat="${cat}" type="number" min="0" max="${p.stock}" value="0"></td>
+            </tr>`).join("")
+        : `<tr><td colspan="4"><div class="empty-state">No items in stock for this category.</div></td></tr>`;
+      return `
+        <div class="section-label">${cat} Items</div>
+        <div class="table-wrap">
+          <table><tr><th>Item</th><th>Stock</th><th>Rate</th><th>Qty</th></tr>${body}</table>
+        </div>`;
+    }).join("");
+  }
+
+  document.getElementById("bill-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const items = [...document.querySelectorAll(".qty-input")]
+      .filter(inp => Number(inp.value) > 0)
+      .map(inp => ({
+        product_id: Number(inp.dataset.id),
+        name: inp.dataset.name,
+        category: inp.dataset.cat,
+        rate: Number(inp.dataset.rate),
+        qty: Number(inp.value),
+      }));
+    if (!items.length) { alert("Please select at least one item."); return; }
+    const payload = Object.fromEntries(f);
+    payload.items = items;
+    const res = await apiPost("/api/bill", payload);
+    window.location.href = `bill_view.html?id=${res.bill_id}`;
+  });
+
+  loadItems();
+</script>
+</body>
+</html>

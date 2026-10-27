@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vendors - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Suppliers</div>
+      <div class="page-title">Vendors</div>
+      <div class="page-sub">Add and manage vendor names, phone numbers, and addresses.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-label">Add Vendor</div>
+    <form id="add-form" class="form-grid">
+      <div class="field"><label for="vendor-name">Name</label><input id="vendor-name" name="name" placeholder="Vendor name" required></div>
+      <div class="field"><label for="vendor-phone">Phone</label><input id="vendor-phone" name="phone" placeholder="Phone no"></div>
+      <div class="field"><label for="vendor-address">Address</label><input id="vendor-address" name="address" placeholder="Address"></div>
+      <div class="field"><button type="submit" class="btn btn-primary btn-block">+ Add Vendor</button></div>
+    </form>
+  </div>
+
+  <div class="section-label">All Vendors</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Phone</th><th>Address</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="3"><div class="empty-state">Loading...</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("vendors", "Bar Ledger");
+  checkBackendHealth();
+
+  async function load() {
+    try {
+      const rows = await apiGet("/api/vendors");
+      document.getElementById("rows").innerHTML = rows.length
+        ? rows.map(v => `<tr><td>${esc(v.name)}</td><td>${esc(v.phone || "-")}</td><td>${esc(v.address || "-")}</td></tr>`).join("")
+        : `<tr><td colspan="3"><div class="empty-state">No vendors yet.</div></td></tr>`;
+    } catch (e) {
+      document.getElementById("rows").innerHTML = `<tr><td colspan="3"><div class="empty-state">${esc(e.message)}</div></td></tr>`;
+    }
+  }
+
+  document.getElementById("add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const f = new FormData(e.target);
+      await apiPost("/api/vendors", Object.fromEntries(f));
+      e.target.reset();
+      load();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  load();
+</script>
+</body>
+</html>

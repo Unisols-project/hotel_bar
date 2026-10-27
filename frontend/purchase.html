@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock In - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Inventory</div>
+      <div class="page-title">Stock In</div>
+      <div class="page-sub">Add stock from vendors. Product stock updates automatically.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-label">Add Purchase</div>
+    <form id="add-form" class="form-grid">
+      <div class="field"><label for="vendor-select">Vendor</label><select name="vendor_id" id="vendor-select" required></select></div>
+      <div class="field"><label for="product-select">Product</label><select name="product_id" id="product-select" required></select></div>
+      <div class="field"><label for="purchase-qty">Qty</label><input id="purchase-qty" name="qty" type="number" min="1" placeholder="1" required></div>
+      <div class="field"><label for="purchase-rate">Rate</label><input id="purchase-rate" name="rate" type="number" step="0.01" min="0" placeholder="0.00" required></div>
+      <div class="field"><button type="submit" id="submit-btn" class="btn btn-primary btn-block">+ Add Stock</button></div>
+    </form>
+  </div>
+
+  <div class="section-label">Purchase History</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Date Time</th><th>Vendor</th><th>Product</th><th>ML / L</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7"><div class="empty-state">Loading...</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("purchase", "Bar Ledger");
+  checkBackendHealth();
+
+  function productSize(p) {
+    return p.volume_value ? `${money(p.volume_value)} ${esc(p.volume_unit || "")}` : "";
+  }
+
+  async function loadDropdowns() {
+    const [vendors, products] = await Promise.all([apiGet("/api/vendors"), apiGet("/api/products")]);
+    document.getElementById("vendor-select").innerHTML = vendors.length
+      ? vendors.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join("")
+      : `<option value="">No vendor found</option>`;
+    document.getElementById("product-select").innerHTML = products.length
+      ? products.map(p => `<option value="${p.id}">${esc(p.name)}${productSize(p) ? ` - ${productSize(p)}` : ""}</option>`).join("")
+      : `<option value="">No product found</option>`;
+    document.getElementById("submit-btn").disabled = !vendors.length || !products.length;
+  }
+
+  async function loadHistory() {
+    try {
+      const rows = await apiGet("/api/purchases");
+      document.getElementById("rows").innerHTML = rows.length
+        ? rows.map(r => `
+            <tr>
+              <td class="mono">${dateTime(r.created_at)}</td>
+              <td>${esc(r.vendor)}</td>
+              <td>${esc(r.product)}</td>
+              <td class="mono">${productSize(r) || "-"}</td>
+              <td class="mono">${r.qty}</td>
+              <td class="mono">Rs ${money(r.rate)}</td>
+              <td class="mono">Rs ${money(r.total)}</td>
+            </tr>`).join("")
+        : `<tr><td colspan="7"><div class="empty-state">No purchases yet.</div></td></tr>`;
+    } catch (e) {
+      document.getElementById("rows").innerHTML = `<tr><td colspan="7"><div class="empty-state">${esc(e.message)}</div></td></tr>`;
+    }
+  }
+
+  document.getElementById("add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const f = new FormData(e.target);
+      await apiPost("/api/purchases", Object.fromEntries(f));
+      e.target.reset();
+      await loadDropdowns();
+      loadHistory();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  loadDropdowns().catch(e => alert(e.message));
+  loadHistory();
+</script>
+</body>
+</html>

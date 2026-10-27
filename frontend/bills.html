@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bill History - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Billing</div>
+      <div class="page-title">Table Bill History</div>
+      <div class="page-sub">Bills generated from table orders</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Bill No</th><th>Table</th><th>Date</th><th>Time</th><th>Day</th><th>Payment</th><th>Total</th><th></th></tr></thead>
+      <tbody id="rows"><tr><td colspan="8"><div class="empty-state">Loading...</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("bills", "Bar Ledger");
+  checkBackendHealth();
+
+  function billDateParts(value) {
+    if (!value) return { date: "-", time: "-", day: "-" };
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return { date: "-", time: "-", day: "-" };
+    return {
+      date: d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      time: d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }),
+      day: d.toLocaleDateString("en-IN", { weekday: "long" }),
+    };
+  }
+
+  async function load() {
+    const rows = await apiGet("/api/bills");
+    document.getElementById("rows").innerHTML = rows.length
+      ? rows.map(b => {
+          const dt = billDateParts(b.created_at);
+          return `
+          <tr>
+            <td class="mono">${esc(b.bill_no)}</td>
+            <td>${esc(b.table_no || "-")}</td>
+            <td class="mono">${esc(dt.date)}</td>
+            <td class="mono">${esc(dt.time)}</td>
+            <td>${esc(dt.day)}</td>
+            <td>${esc(b.payment || "-")}</td>
+            <td class="mono">Rs ${money(b.grand_total)}</td>
+            <td><a class="btn" href="bill_view.html?id=${b.id}">View</a></td>
+          </tr>`;
+        }).join("")
+      : `<tr><td colspan="8"><div class="empty-state">No bills yet.</div></td></tr>`;
+  }
+
+  load();
+</script>
+</body>
+</html>

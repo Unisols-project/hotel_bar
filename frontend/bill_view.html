@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Table Bill - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main" id="main">
+  <div class="empty-state">Loading...</div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("bills", "Bar Ledger");
+  checkBackendHealth();
+
+  async function load() {
+    const params = new URLSearchParams(location.search);
+    const id = params.get("id");
+    const tableId = params.get("table_id");
+    const data = await apiGet(`/api/bills/${id}`);
+    const b = data.bill;
+    const items = data.items;
+    const tableName = b.table_no || "Table";
+    const createdAt = new Date(b.created_at);
+    const invoiceDate = Number.isNaN(createdAt.getTime()) ? "-" : createdAt.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const invoiceTime = Number.isNaN(createdAt.getTime()) ? "-" : createdAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const invoiceDay = Number.isNaN(createdAt.getTime()) ? "-" : createdAt.toLocaleDateString("en-IN", { weekday: "long" });
+    const categorySection = (title, category, summary) => {
+      const categoryItems = items.filter(item => item.category === category);
+      if (!categoryItems.length) return "";
+      return `
+        <section class="invoice-section">
+          <h2>${title}</h2>
+          <table>
+            <thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th class="right">Amount</th></tr></thead>
+            <tbody>${categoryItems.map(item => `
+              <tr>
+                <td>${esc(item.item_name)}</td>
+                <td class="mono">${item.qty}</td>
+                <td class="mono">Rs ${money(item.rate)}</td>
+                <td class="mono right">Rs ${money(item.amount)}</td>
+              </tr>`).join("")}</tbody>
+          </table>
+          <div class="category-summary">${summary}</div>
+        </section>`;
+    };
+
+    const foodSection = categorySection("Food", "Food", `
+      <div><span>Sub Total</span><span>Rs ${money(b.food_total)}</span></div>
+      <div><span>SGST (2.5%)</span><span>Rs ${money(b.sgst)}</span></div>
+      <div><span>CGST (2.5%)</span><span>Rs ${money(b.cgst)}</span></div>
+      <div class="section-total"><span>Total</span><span>Rs ${money(Number(b.food_total) + Number(b.sgst) + Number(b.cgst))}</span></div>`);
+    const liquorSection = categorySection("Liquor", "Liquor", `
+      <div><span>Sub Total</span><span>Rs ${money(b.liquor_subtotal)}</span></div>
+      <div><span>VAT (10%)</span><span>Rs ${money(b.vat)}</span></div>
+      <div class="section-total"><span>Total</span><span>Rs ${money(b.liquor_total)}</span></div>`);
+    const otherSection = categorySection("Other", "Other", `
+      <div><span>Sub Total</span><span>Rs ${money(b.other_total)}</span></div>
+      <div class="section-total"><span>Total</span><span>Rs ${money(b.other_total)}</span></div>`);
+
+    document.getElementById("main").innerHTML = `
+      <div class="page-head no-print">
+        <div>
+          <div class="eyebrow">Table Bill</div>
+          <div class="page-title page-title-sm">${esc(tableName)} Bill</div>
+          <div class="page-sub">This bill was generated from a table order.</div>
+        </div>
+        <div class="row compact-row">
+          <a class="btn" href="${tableId ? `table_order.html?id=${tableId}` : "tables.html"}">Back to Same Table</a>
+          <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+        </div>
+      </div>
+
+      <div class="panel table-bill">
+        <div class="receipt-head">
+          <div class="rh-title">${esc(b.hotel_name || "Bar Ledger")}</div>
+          ${b.hotel_phone ? `<div class="rh-contact">Phone: ${esc(b.hotel_phone)}</div>` : ""}
+          ${b.hotel_address ? `<div class="rh-contact">${esc(b.hotel_address)}</div>` : ""}
+          ${b.hotel_gstin ? `<div class="rh-contact">GSTIN: ${esc(b.hotel_gstin)}</div>` : ""}
+          ${b.hotel_fssai ? `<div class="rh-contact">FSSAI: ${esc(b.hotel_fssai)}</div>` : ""}
+          <div class="invoice-title">TAX INVOICE</div>
+        </div>
+
+        <div class="invoice-details">
+          <div><span>Bill No.</span><strong>${esc(b.bill_no)}</strong></div>
+          <div><span>Table</span><strong>${esc(tableName)}</strong></div>
+          <div><span>Customer Name</span><strong>${esc(b.customer_name || "Walk-in Customer")}</strong></div>
+          <div><span>Customer Phone No.</span><strong>${esc(b.phone || "-")}</strong></div>
+          <div><span>Date</span><strong>${invoiceDate}</strong></div>
+          <div><span>Time</span><strong>${invoiceTime}</strong></div>
+          <div><span>Day</span><strong>${invoiceDay}</strong></div>
+          <div><span>Payment Mode</span><strong>${esc(b.payment || "Cash")}</strong></div>
+        </div>
+
+        ${foodSection}${liquorSection}${otherSection}
+        <div class="bill-summary"><div class="grand"><span>Grand Total (Rs.)</span><span>Rs ${money(b.grand_total)}</span></div></div>
+      </div>
+    `;
+  }
+
+  load();
+</script>
+</body>
+</html>

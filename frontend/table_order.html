@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Table Order - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="order-header">
+    <div>
+      <div class="eyebrow">Tables</div>
+      <div class="page-title" id="tbl-name">Loading...</div>
+    </div>
+    <a class="btn" href="tables.html">Back to Tables</a>
+  </div>
+
+  <div class="order-layout">
+    <div>
+      <div class="section-label">Pick Items</div>
+      <div class="category-tabs" id="category-tabs">
+        <button type="button" class="cat-tab active" onclick="setCategory('All')">All</button>
+        <button type="button" class="cat-tab" onclick="setCategory('Food')">Food</button>
+        <button type="button" class="cat-tab" onclick="setCategory('Liquor')">Liquor</button>
+        <button type="button" class="cat-tab" onclick="setCategory('Other')">Other</button>
+      </div>
+      <div class="pick-list" id="pick-list"><div class="empty-state">Loading...</div></div>
+    </div>
+
+    <div class="receipt">
+      <div class="receipt-head">
+        <div class="rh-title">Bar Ledger</div>
+        <div class="rh-no" id="tbl-no">Table</div>
+      </div>
+      <div id="cart-lines"><div class="cart-empty">Your cart is empty.</div></div>
+      <div class="receipt-total"><span>Total</span><span id="cart-total">Rs 0.00</span></div>
+      <div class="invoice-form">
+        <div class="field"><label for="customer-name">Customer Name</label><input id="customer-name" placeholder="Customer name"></div>
+        <div class="field"><label for="customer-phone">Customer Phone No.</label><input id="customer-phone" type="tel" placeholder="Phone number"></div>
+        <div class="field"><label for="payment-mode">Payment Mode</label>
+          <select id="payment-mode"><option>Cash</option><option>UPI</option><option>Card</option><option>Pending</option></select>
+        </div>
+      </div>
+      <div class="receipt-actions">
+        <button type="button" class="btn btn-danger" onclick="clearCart()">Clear</button>
+        <button type="button" class="btn btn-primary" onclick="generateBill()">Generate Bill</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("tables", "Bar Ledger");
+  checkBackendHealth();
+
+  const tableId = new URLSearchParams(location.search).get("id");
+  let PRODUCTS = [];
+  let SELECTED_CATEGORY = "All";
+
+  function productSize(p) {
+    return p.volume_value ? `${money(p.volume_value)} ${esc(p.volume_unit || "")}` : "";
+  }
+
+  async function load() {
+    if (!tableId) {
+      window.location.href = "tables.html";
+      return;
+    }
+
+    const [tblData, products] = await Promise.all([
+      apiGet(`/api/tables/${tableId}`),
+      apiGet("/api/products"),
+    ]);
+
+    PRODUCTS = products.filter(p => p.stock > 0);
+    document.getElementById("tbl-name").textContent = tblData.table.name;
+    document.getElementById("tbl-no").textContent = tblData.table.name;
+    renderProducts();
+
+    document.getElementById("cart-lines").innerHTML = tblData.cart.length
+      ? tblData.cart.map(c => `
+          <div class="cart-line">
+            <div class="cl-name">${esc(c.name)} <span class="muted">x${c.qty}</span></div>
+            <div class="cl-qty-ctrl">
+              <button type="button" class="qty-btn" onclick="changeQty(${c.product_id}, -1)">-</button>
+              <button type="button" class="qty-btn" onclick="changeQty(${c.product_id}, 1)">+</button>
+            </div>
+            <div>Rs ${money(c.rate * c.qty)}</div>
+          </div>
+        `).join("")
+      : `<div class="cart-empty">Your cart is empty.</div>`;
+    document.getElementById("cart-total").textContent = "Rs " + money(tblData.cart_total);
+  }
+
+  function renderProducts() {
+    const rows = SELECTED_CATEGORY === "All"
+      ? PRODUCTS
+      : PRODUCTS.filter(p => p.category === SELECTED_CATEGORY);
+
+    document.getElementById("pick-list").innerHTML = rows.map(p => `
+      <div class="pick-item">
+        <div class="pi-name">${esc(p.name)}</div>
+        <div class="pi-cat">${esc(p.category)}${productSize(p) ? ` / ${productSize(p)}` : ""}</div>
+        <div class="pi-price">Rs ${money(p.rate)}</div>
+        <div class="pi-stock">stock ${p.stock}</div>
+        <button type="button" class="btn" onclick="addItem(${p.id})">+ Add</button>
+      </div>
+    `).join("") || `<div class="empty-state">No items in stock for this category.</div>`;
+  }
+
+  function setCategory(category) {
+    SELECTED_CATEGORY = category;
+    document.querySelectorAll(".cat-tab").forEach(btn => {
+      btn.classList.toggle("active", btn.textContent === category);
+    });
+    renderProducts();
+  }
+
+  async function addItem(productId) {
+    await apiPost(`/api/tables/${tableId}/add`, { product_id: productId });
+    load();
+  }
+
+  async function changeQty(productId, delta) {
+    await apiPost(`/api/tables/${tableId}/qty`, { product_id: productId, delta });
+    load();
+  }
+
+  async function clearCart() {
+    if (!confirm("Clear all items from the cart?")) return;
+    await apiPost(`/api/tables/${tableId}/clear`, {});
+    load();
+  }
+
+  async function generateBill() {
+    try {
+      const res = await apiPost(`/api/tables/${tableId}/generate`, {
+        customer_name: document.getElementById("customer-name").value.trim(),
+        phone: document.getElementById("customer-phone").value.trim(),
+        payment: document.getElementById("payment-mode").value,
+      });
+      window.location.href = `bill_view.html?id=${res.bill_id}&table_id=${tableId}`;
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

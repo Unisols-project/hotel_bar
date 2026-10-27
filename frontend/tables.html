@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tables - Bar Ledger</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Floor</div>
+      <div class="page-title">Tables</div>
+      <div class="page-sub">Select a table, add items to the order, and generate a bill.</div>
+    </div>
+  </div>
+
+  <div class="tables-grid" id="grid"><div class="empty-state">Loading...</div></div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("tables", "Bar Ledger");
+  checkBackendHealth();
+
+  async function load() {
+    const rows = await apiGet("/api/tables");
+    const cards = rows.map(t => `
+      <div class="table-card ${t.item_count > 0 ? "occupied" : ""}" onclick="openTable(${t.id})">
+        <div class="tc-top">
+          <div class="tc-name">${esc(t.name)}</div>
+        </div>
+        <div class="tc-meta">${t.item_count} items</div>
+        <div class="tc-total">Rs ${money(t.total)}</div>
+      </div>
+    `).join("");
+    document.getElementById("grid").innerHTML = cards + `
+      <div class="add-table-form"><button type="button" onclick="addTable()">+ Add Table</button></div>
+    `;
+  }
+
+  function openTable(id) {
+    window.location.href = `table_order.html?id=${id}`;
+  }
+
+  async function addTable() {
+    await apiPost("/api/tables", {});
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bar Ledger — Hotel Bar Billing</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+
+<div class="sidebar" id="sidebar"></div>
+
+<div class="main">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Overview</div>
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub"></div>
+    </div>
+  </div>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card"><div class="label">Loading…</div></div>
+  </div>
+
+  <div class="section-label">Low Stock Alert</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Min Stock</th></tr></thead>
+      <tbody id="low-stock-body"><tr><td colspan="4"><div class="empty-state">Loading…</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="static/config.js"></script>
+<script src="static/app.js"></script>
+<script>
+  renderSidebar("dashboard", "Bar Ledger");
+
+  async function load() {
+    const health = await checkBackendHealth();
+    try {
+      const data = await apiGet("/api/dashboard");
+      renderSidebar("dashboard", data.app_name);
+
+      const s = data.stats;
+      document.getElementById("stats-row").innerHTML = `
+        <div class="stat-card amber"><div class="bar-accent"></div><div class="label">Products</div><div class="value">${s.products}</div></div>
+        <div class="stat-card ok"><div class="bar-accent"></div><div class="label">Vendors</div><div class="value">${s.vendors}</div></div>
+        <div class="stat-card warn"><div class="bar-accent"></div><div class="label">Total Stock</div><div class="value">${s.stock}</div></div>
+        <div class="stat-card"><div class="bar-accent"></div><div class="label">Total Sales</div><div class="value">Rs ${money(s.sales)}</div></div>
+      `;
+
+      const low = data.low_stock;
+      document.getElementById("low-stock-body").innerHTML = low.length
+        ? low.map(p => `
+            <tr>
+              <td>${esc(p.name)}</td>
+              <td>${esc(p.category)}</td>
+              <td class="mono">${p.stock}</td>
+              <td class="mono">${p.min_stock}</td>
+            </tr>`).join("")
+        : `<tr><td colspan="4"><div class="empty-state">All products are adequately stocked.</div></td></tr>`;
+    } catch (e) {
+      document.getElementById("stats-row").innerHTML =
+        `<div class="stat-card bad"><div class="label">Error</div><div class="value error-text-sm">Unable to connect to the backend. Please check that it is running.</div></div>`;
+    }
+  }
+  load();
+</script>
+</body>
+</html>
